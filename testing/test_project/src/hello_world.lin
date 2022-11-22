@@ -1,0 +1,12 @@
+fn xyz(arg: A<>) -> Vec<> {
+
+}
+
+fn my_cool_fn(arg1: T1, arg2: T2, arg3: path::to::T4) -> T5{
+
+}
+
+fn main() {
+    path::to::println("1 + 2");
+    println("Hello, world!");
+}
