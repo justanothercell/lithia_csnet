@@ -1,5 +1,5 @@
 use crate::ast::ast::{AstLiteral, Expr, Expression, FullType, Func, Ident, Item, Statement, Stmt, Type, TypeT};
-use crate::tokens::tokens::Literal;
+use crate::tokens::tokens::{Literal, NumLit};
 
 pub(crate) trait CodePrinter{
     fn print(&self) -> String;
@@ -56,10 +56,11 @@ impl CodePrinter for Item {
 impl CodePrinter for Literal {
     fn print(&self) -> String {
         match self {
-            Literal::String(s) => format!("\"{}\"", s),
-            Literal::Char(c) => format!("'{}'", c),
-            Literal::Integer(i) => format!("{}", i),
-            Literal::Float(f) => format!("{}", f)
+            Literal::String(s) => format!("{s:?}"),
+            Literal::Char(c) => format!("{c:?}"),
+            Literal::Number(NumLit::Integer(i), ty) => format!("{i}{}", ty.as_ref().map_or(String::new(), |t| format!("{t}"))),
+            Literal::Number(NumLit::Float(f), ty) => format!("{f}{}", ty.as_ref().map_or(String::new(), |t| format!("{t}"))),
+            Literal::Bool(b) => format!("{b}"),
         }
     }
 }
@@ -81,7 +82,14 @@ impl CodePrinter for Expression {
 impl CodePrinter for Statement {
     fn print(&self) -> String {
         match &self.0 {
-            Stmt::FuncCall(ident, args) => format!("{}({});", ident.print(), args.print_items().join(", "))
+            Stmt::FuncCall(ident, args) => format!("{}({});", ident.print(), args.print_items().join(", ")),
+            Stmt::VarCreate(ident, mutable, ty, expr) =>
+                format!("let {}{}{} = {};",
+                    ident.print(),
+                    if *mutable { "mut "} else {""}.to_string(),
+                    ty.as_ref().map(|t|format!(": {}", t.print())).unwrap_or("".to_string()),
+                    expr.print()
+                ),
         }
     }
 }

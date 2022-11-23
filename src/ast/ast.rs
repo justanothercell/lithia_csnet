@@ -58,7 +58,12 @@ pub(crate) struct Func {
 
 #[derive(Debug, Clone)]
 pub(crate) enum Stmt {
-    FuncCall(Item, Vec<Expression>)
+    FuncCall(Item, Vec<Expression>),
+    VarCreate(Item, Self::mutable, Option<FullType>, Expression)
+}
+
+impl Stmt {
+    type mutable = bool;
 }
 
 #[derive(Debug, Clone)]

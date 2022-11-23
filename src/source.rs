@@ -2,6 +2,7 @@ use std::fmt::{Debug, Display, Formatter};
 use std::fs::File;
 use std::io::{Read};
 use std::rc::Rc;
+use crate::tokens::tokens::{Literal, NumLit};
 
 
 /* !! no clone !! */
@@ -210,6 +211,10 @@ impl ParseError {
         self.context.push(reason.to_string());
         self
     }
+    pub(crate) fn at(mut self, loc: Span) -> Self{
+        self.loc = Some(loc);
+        self
+    }
 }
 
 impl From<std::io::Error> for ParseError {
@@ -224,6 +229,7 @@ pub(crate) enum ParseET {
     EmptyInput,
     IOError(std::io::Error),
     TokenizationError(String),
+    ParseLiteralError(Literal, String),
     ParsingError(String)
 }
 
@@ -252,6 +258,13 @@ impl Display for ParseError {
                    ParseET::EmptyInput => format!("Input error:\n    input was empty"),
                    ParseET::IOError(e) => format!("IO error:\n    {}", e),
                    ParseET::TokenizationError(e) => format!("Tokenization error:\n    {}", e),
+                   ParseET::ParseLiteralError(lit, e) => format!("{} literal parsing error:\n    {}", match lit {
+                       Literal::String(_) => "String",
+                       Literal::Char(_) => "Char",
+                       Literal::Number(NumLit::Integer(_), _) => "Integer",
+                       Literal::Number(NumLit::Float(_), _) => "Float",
+                       Literal::Bool(_) => "Float",
+                   }, e),
                    ParseET::ParsingError(e) => format!("Parsing error:\n    {}", e)
                },
                if self.context.len() > 0 {
@@ -279,12 +292,17 @@ impl Display for ParseError {
 }
 
 pub(crate) trait OnParseErr{
-    fn when_e(self, reason: String) -> Self;
+    fn e_when(self, reason: String) -> Self;
+    fn e_at(self, loc: Span) -> Self;
 }
 
 impl<T> OnParseErr for Result<T, ParseError> {
-    fn when_e(self, reason: String) -> Self {
+    fn e_when(self, reason: String) -> Self {
         self.map_err(|err| err.when(&reason))
+    }
+
+    fn e_at(self, loc: Span) -> Self {
+        self.map_err(|err| err.at(loc))
     }
 }
 
