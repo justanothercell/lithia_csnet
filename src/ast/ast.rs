@@ -1,10 +1,48 @@
-use crate::source::Span;
+use crate::source::{ParseError, ParseET, Span};
 use crate::tokens::tokens::Literal;
 
 #[derive(Debug, Clone)]
-pub(crate) enum  Expr {
-    Literal(AstLiteral)
+pub(crate) enum Expr {
+    Literal(AstLiteral),
+    BinaryOp(Operator, Box<Expr>, Box<Expr>),
+    UnaryOp(Operator, Box<Expr>)
 }
+
+#[derive(Debug, Clone)]
+pub(crate) struct Operator(pub(crate) Op, pub(crate) Span);
+
+#[derive(Debug, Clone)]
+pub(crate) enum Op {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    LShift,
+    RShift,
+}
+
+impl Op {
+    pub(crate) fn from_chars(chars: Vec<char>, loc: Option<Span>) -> Result<Op, ParseError>{
+        Ok(match String::from_utf8(chars.into_iter().map(|c|c as u8).collect()).unwrap().as_str() {
+            "+" => Op::Add,
+            "-" => Op::Sub,
+            "*" => Op::Mul,
+            "/" => Op::Div,
+            "<<" => Op::LShift,
+            ">>" => Op::RShift,
+            op => {
+                let et = ParseET::ParsingError(format!("Operator '{op}' not recognized"));
+                return Err(if let Some(span) = loc {
+                    et.at(span)
+                } else {
+                    et.error()
+                })
+            }
+        })
+    }
+}
+
+
 
 #[derive(Debug, Clone)]
 pub(crate) struct Expression(pub(crate) Expr, pub(crate) Span);
