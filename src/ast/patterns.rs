@@ -1,10 +1,24 @@
 use std::rc::Rc;
+use crate::ast::consumers::{PatternConsumer, Unwrapper};
 use crate::source::{OnParseErr, ParseError, Span};
 use crate::tokens::tok_iter::TokIter;
 
 pub(crate) trait Consumer {
     type Output;
     fn consume(&self, iter: &mut TokIter) -> Result<Self::Output, ParseError>;
+}
+
+pub(crate) trait MapConsumer<Out>: Sized + Consumer {
+    fn mapper<Mapped>(self, mapper: fn((Self::Output,), Span) -> Mapped) -> PatternConsumer<(Self,), Mapped> {
+        PatternConsumer(Pattern::inline((self, ), mapper))
+    }
+    fn mapper_failable<Mapped>(self, mapper: fn((Self::Output,), Span) -> Result<Mapped, ParseError>) -> Unwrapper<(Self,), Mapped> {
+        Unwrapper(Pattern::inline((self, ), mapper))
+    }
+}
+
+impl<T: Consumer<Output=Out>, Out> MapConsumer<Out> for T {
+
 }
 
 pub(crate) struct Pattern<T: ConsumerTuple, Out> {
@@ -40,6 +54,7 @@ impl<T: ConsumerTuple, Out> Pattern<T, Out> {
         Ok((self.mapper)(r?, span))
     }
 }
+
 
 impl Pattern<(), ()> {
     pub(crate) fn dummy() -> Rc<Self>{

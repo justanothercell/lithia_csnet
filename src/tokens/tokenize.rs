@@ -29,7 +29,11 @@ pub(crate) fn tokenize(source: Source) -> Result<Vec<Token>, ParseError>{
             c if c.is_ascii_alphabetic() || c == '_' => {
                 let (ident, span) = collect_until(&mut iter, false, false,
                                                   |c| c.is_ascii_alphanumeric() || c == '_').e_when("tokenizing identifier".to_string())?;
-                tokens.push(TokenType::Ident(ident).at(span));
+                tokens.push(match ident {
+                    ident if &ident == "true" => TokenType::Literal(Literal::Bool(true)),
+                    ident if &ident == "false" => TokenType::Literal(Literal::Bool(false)),
+                    ident => TokenType::Ident(ident)
+                }.at(span));
             }
             c if c.is_ascii_digit() => {
                 iter.index -= 1;
@@ -64,7 +68,6 @@ fn collect_until(iter: &mut SourceIter, skip_first: bool, consume_break: bool, c
 }
 
 pub(crate) fn str_to_num_lit(mut num: String) -> Result<(NumLit, Option<NumLitTy>), ParseError>{
-    println!("{num}");
     num = num.replace('_', "");
     let radix = if num.len() > 2 {
         if num.chars().nth(0).unwrap() == '0' {

@@ -85,11 +85,12 @@ impl CodePrinter for Statement {
             Stmt::FuncCall(ident, args) => format!("{}({});", ident.print(), args.print_items().join(", ")),
             Stmt::VarCreate(ident, mutable, ty, expr) =>
                 format!("let {}{}{} = {};",
-                    ident.print(),
-                    if *mutable { "mut "} else {""}.to_string(),
-                    ty.as_ref().map(|t|format!(": {}", t.print())).unwrap_or("".to_string()),
-                    expr.print()
+                        if *mutable { "mut "} else {""}.to_string(),
+                        ident.print(),
+                        ty.as_ref().map(|t|format!(": {}", t.print())).unwrap_or("".to_string()),
+                        expr.print()
                 ),
+            Stmt::VarAssign(ident, expr) => format!("{} = {};", ident.print(), expr.print())
         }
     }
 }

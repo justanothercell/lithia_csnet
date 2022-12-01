@@ -39,6 +39,23 @@ impl Consumer for GetIdentConsumer {
     }
 }
 
+pub(crate) struct GetParticleConsumer;
+
+impl Consumer for GetParticleConsumer {
+    type Output = (char, Span);
+    fn consume(&self, iter: &mut TokIter) -> Result<Self::Output, ParseError> {
+        let tok = iter.this()?;
+        if let TokenType::Particle(c) = tok.tt {
+            iter.next();
+            Ok((c, tok.loc))
+        }
+        else {
+            let tok = iter.this()?;
+            Err(ParseET::ParsingError(format!("expected Particle, found {:?}", tok.tt)).at(tok.loc))
+        }
+    }
+}
+
 pub(crate) struct GetLiteralConsumer;
 
 impl Consumer for GetLiteralConsumer {
@@ -62,8 +79,8 @@ pub(crate) struct ListConsumer<
     DeliPred: ConsumerTuple, DeliPredOut,
     Deli: ConsumerTuple, DeliOut>
 (
-    pub(crate) ConditionalConsumer<ItemPred, ItemPredOut, Item, ItemOut, Option<ItemOut>>,
-    pub(crate) ConditionalConsumer<DeliPred, DeliPredOut, Deli, DeliOut, Option<DeliOut>>,
+    pub(crate) ConditionalConsumer<ItemPred, ItemPredOut, Item, ItemOut>,
+    pub(crate) ConditionalConsumer<DeliPred, DeliPredOut, Deli, DeliOut>,
     Trail, bool
 );
 
@@ -79,19 +96,15 @@ impl<Item: ConsumerTuple, ItemOut,
 ListConsumer<Item, ItemOut, Item, ItemOut, Deli, DeliOut, Deli, DeliOut> {
     pub(crate) fn non_empty(item_pat: Rc<Pattern<Item, ItemOut>>, deli_pat: Rc<Pattern<Deli, DeliOut>>, trail: Trail) -> Self {
         Self(ConditionalConsumer(item_pat.clone(),
-                                 item_pat,
-                                 |i, _| i),
+                                 item_pat),
              ConditionalConsumer(deli_pat.clone(),
-                                 deli_pat,
-                                 |i, _| i), trail, false)
+                                 deli_pat), trail, false)
     }
     pub(crate) fn maybe_empty(item_pat: Rc<Pattern<Item, ItemOut>>, deli_pat: Rc<Pattern<Deli, DeliOut>>, trail: Trail) -> Self {
         Self(ConditionalConsumer(item_pat.clone(),
-                                 item_pat,
-                                 |i, _| i),
+                                 item_pat),
              ConditionalConsumer(deli_pat.clone(),
-                                 deli_pat,
-                                 |i, _| i), trail, true)
+                                 deli_pat), trail, true)
     }
 }
 
@@ -100,13 +113,13 @@ impl<ItemPred: ConsumerTuple, ItemPredOut,
         DeliPred: ConsumerTuple, DeliPredOut,
         Deli: ConsumerTuple, DeliOut>
     ListConsumer<ItemPred, ItemPredOut, Item, ItemOut, DeliPred, DeliPredOut, Deli, DeliOut> {
-    pub(crate) fn non_empty_pred(item_cond: ConditionalConsumer<ItemPred, ItemPredOut, Item, ItemOut, Option<ItemOut>>,
-                                 deli_cond: ConditionalConsumer<DeliPred, DeliPredOut, Deli, DeliOut, Option<DeliOut>>,
+    pub(crate) fn non_empty_pred(item_cond: ConditionalConsumer<ItemPred, ItemPredOut, Item, ItemOut>,
+                                 deli_cond: ConditionalConsumer<DeliPred, DeliPredOut, Deli, DeliOut>,
                                  trail: Trail) -> Self{
         Self(item_cond, deli_cond, trail, false)
     }
-    pub(crate) fn maybe_empty_pred(item_cond: ConditionalConsumer<ItemPred, ItemPredOut, Item, ItemOut, Option<ItemOut>>,
-                                  deli_cond: ConditionalConsumer<DeliPred, DeliPredOut, Deli, DeliOut, Option<DeliOut>>,
+    pub(crate) fn maybe_empty_pred(item_cond: ConditionalConsumer<ItemPred, ItemPredOut, Item, ItemOut>,
+                                  deli_cond: ConditionalConsumer<DeliPred, DeliPredOut, Deli, DeliOut>,
                                   trail: Trail) -> Self{
         Self(item_cond, deli_cond, trail, true)
     }
@@ -173,23 +186,20 @@ impl<Out> Consumer for RefLoopPatternConsumer<Out> {
 
 pub(crate) struct ConditionalConsumer<
     Predicate: ConsumerTuple, PredicateOut,
-    Item: ConsumerTuple, Out,
-    Mapped>
+    Item: ConsumerTuple, Out>
 (pub(crate) Rc<Pattern<Predicate, PredicateOut>>,
- pub(crate) Rc<Pattern<Item, Out>>,
- pub(crate) fn(Option<Out>, Span) -> Mapped);
+ pub(crate) Rc<Pattern<Item, Out>>);
 
 impl<Predicate: ConsumerTuple, PredicateOut,
-    Item: ConsumerTuple, Out,
-    Mapped>
-Consumer for ConditionalConsumer<Predicate, PredicateOut, Item, Out, Mapped> {
-    type Output = Mapped;
+    Item: ConsumerTuple, Out>
+Consumer for ConditionalConsumer<Predicate, PredicateOut, Item, Out> {
+    type Output = Option<Out>;
     fn consume(&self, iter: &mut TokIter) -> Result<Self::Output, ParseError> {
-        Ok((self.2)(if let Ok(_) = self.0.consume(&mut iter.clone()){
+        Ok(if let Ok(_) = self.0.consume(&mut iter.clone()){
             Some(self.1.consume(iter)?)
         } else {
             None
-        }, iter.this()?.loc))
+        })
     }
 }
 
@@ -217,5 +227,23 @@ Consumer for BranchIfElse<Predicate, PredicateOut, IfBranch, ElseBranch, Branche
         } else {
             self.2.consume(iter)
         }
+    }
+}
+
+pub(crate) struct CustomConsumer<Out> (pub(crate) fn(&mut TokIter) -> Result<Out, ParseError>);
+
+impl <Out> Consumer for CustomConsumer<Out>{
+    type Output = Out;
+    fn consume(&self, iter: &mut TokIter) -> Result<Self::Output, ParseError> {
+        (self.0)(iter)
+    }
+}
+
+pub(crate) struct Unwrapper<T: ConsumerTuple, Out>(pub(crate) Rc<Pattern<T, Result<Out, ParseError>>>);
+
+impl<T: ConsumerTuple, Out> Consumer for Unwrapper<T, Out> {
+    type Output = Out;
+    fn consume(&self, iter: &mut TokIter) -> Result<Self::Output, ParseError> {
+        self.0.consume(iter)?
     }
 }

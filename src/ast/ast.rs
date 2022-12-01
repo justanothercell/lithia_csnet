@@ -24,7 +24,7 @@ pub(crate) struct FullType(pub(crate) TypeT, pub(crate) Span);
 #[derive(Debug, Clone)]
 pub(crate) enum TypeT {
     Single(Type),
-    Tuple(Vec<TypeT>)
+    Tuple(Vec<FullType>)
 }
 
 impl TypeT {
@@ -59,7 +59,8 @@ pub(crate) struct Func {
 #[derive(Debug, Clone)]
 pub(crate) enum Stmt {
     FuncCall(Item, Vec<Expression>),
-    VarCreate(Item, Self::mutable, Option<FullType>, Expression)
+    VarCreate(Item, Self::mutable, Option<FullType>, Expression),
+    VarAssign(Item, Expression)
 }
 
 impl Stmt {

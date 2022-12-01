@@ -7,12 +7,12 @@ fn my_cool_fn(arg1: T1, arg2: T2, arg3: path::to::T4) -> T5{
 }
 
 fn main() {
-    path::to::println(0q32i8);
     println("Hello, world!", "Goodbye, world!");
     let a = 0;
-    let b: (i32, bool) = "";
+    let b: (bool, (bool, bool)) = "";
     let mut c = 0xFF;
     let mut d: Option<i32> = 0;
     c = false;
     x += 1;
+    path::to::println(0q32i8);
 }
