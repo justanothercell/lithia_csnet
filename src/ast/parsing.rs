@@ -201,6 +201,8 @@ pub(crate) fn parse_tokens(tokens: Vec<Token>) -> Result<(), ParseError>{
         body,
         loc
     });
+
+
     println!("{}", fn_pattern.consume(&mut iter)?.print());
     println!("{}", fn_pattern.consume(&mut iter)?.print());
     let main = fn_pattern.consume(&mut iter)?;

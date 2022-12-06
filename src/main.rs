@@ -9,6 +9,7 @@ mod tokens;
 mod cs_compiler;
 mod source;
 mod debugging;
+mod analyzer;
 
 use std::error::Error;
 use std::process::exit;
