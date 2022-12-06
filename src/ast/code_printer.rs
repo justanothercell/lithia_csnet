@@ -1,4 +1,4 @@
-use crate::ast::ast::{AstLiteral, Expr, Expression, FullType, Func, Ident, Item, Statement, Stmt, Type, TypeT};
+use crate::ast::ast::{AstLiteral, Expr, Expression, FullType, Func, Ident, Item, Op, Operator, Statement, Stmt, Type, TypeT};
 use crate::tokens::tokens::{Literal, NumLit};
 
 pub(crate) trait CodePrinter{
@@ -74,8 +74,23 @@ impl CodePrinter for AstLiteral {
 impl CodePrinter for Expression {
     fn print(&self) -> String {
         match &self.0 {
-            Expr::Literal(lit) => lit.print()
+            Expr::Literal(lit) => lit.print(),
+            Expr::UnaryOp(op, box expr) => format!("{}{}", op.print(), expr.print()),
+            Expr::BinaryOp(op, box left, box right) => format!("{} {} {}", left.print(), op.print(), right.print())
         }
+    }
+}
+
+impl CodePrinter for Operator {
+    fn print(&self) -> String {
+        match self.0 {
+            Op::Add => "+",
+            Op::Sub => "-",
+            Op::Mul => "*",
+            Op::Div => "/",
+            Op::LShift => "<<",
+            Op::RShift => ">>"
+        }.to_string()
     }
 }
 

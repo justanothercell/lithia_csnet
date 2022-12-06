@@ -4,8 +4,8 @@ use crate::tokens::tokens::Literal;
 #[derive(Debug, Clone)]
 pub(crate) enum Expr {
     Literal(AstLiteral),
-    BinaryOp(Operator, Box<Expr>, Box<Expr>),
-    UnaryOp(Operator, Box<Expr>)
+    BinaryOp(Operator, Box<Expression>, Box<Expression>),
+    UnaryOp(Operator, Box<Expression>)
 }
 
 #[derive(Debug, Clone)]

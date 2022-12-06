@@ -1,7 +1,10 @@
 use std::rc::Rc;
+use std::task::ready;
 use crate::ast::consumers::{PatternConsumer, Unwrapper};
 use crate::source::{OnParseErr, ParseError, Span};
 use crate::tokens::tok_iter::TokIter;
+
+pub(crate) type Pat<Out> = Rc<Box<dyn ConsumablePattern<Output=Out>>>;
 
 pub(crate) trait Consumer {
     type Output;
@@ -9,10 +12,12 @@ pub(crate) trait Consumer {
 }
 
 pub(crate) trait MapConsumer<Out>: Sized + Consumer {
-    fn mapper<Mapped>(self, mapper: fn((Self::Output,), Span) -> Mapped) -> PatternConsumer<(Self,), Mapped> {
+    fn mapper<Mapped: 'static>(self, mapper: fn((Self::Output,), Span) -> Mapped) -> PatternConsumer<Mapped>
+        where Self: 'static {
         PatternConsumer(Pattern::inline((self, ), mapper))
     }
-    fn mapper_failable<Mapped>(self, mapper: fn((Self::Output,), Span) -> Result<Mapped, ParseError>) -> Unwrapper<(Self,), Mapped> {
+    fn mapper_failable<Mapped: 'static>(self, mapper: fn((Self::Output,), Span) -> Result<Mapped, ParseError>) -> Unwrapper<Mapped>
+        where Self: 'static {
         Unwrapper(Pattern::inline((self, ), mapper))
     }
 }
@@ -27,24 +32,14 @@ pub(crate) struct Pattern<T: ConsumerTuple, Out> {
     mapper: fn(T::Output, Span) -> Out
 }
 
-impl<T: ConsumerTuple, Out> Pattern<T, Out> {
-    pub(crate) fn inline(consumers: T, mapper: fn(T::Output, Span) -> Out) -> Rc<Self>{
-        Rc::new(Self {
-            name: None,
-            consumers,
-            mapper
-        })
-    }
+pub(crate) trait ConsumablePattern{
+    type Output;
+    fn consume(&self, iter: &mut TokIter) -> Result<Self::Output, ParseError>;
+}
 
-    pub(crate) fn named(name: &str, consumers: T, mapper: fn(T::Output, Span) -> Out) -> Rc<Self>{
-        Rc::new(Self {
-            name: Some(name.to_string()),
-            consumers,
-            mapper
-        })
-    }
-
-    pub(crate) fn consume(&self, iter: &mut TokIter) -> Result<Out, ParseError>{
+impl<T: ConsumerTuple, Out> ConsumablePattern for Pattern<T, Out> {
+    type Output = Out;
+    fn consume(&self, iter: &mut TokIter) -> Result<Self::Output, ParseError>{
         let mut span = iter.this()?.loc;
         let mut r = self.consumers.consume(iter);
         if let Some(name) = &self.name {
@@ -55,24 +50,41 @@ impl<T: ConsumerTuple, Out> Pattern<T, Out> {
     }
 }
 
-
-impl Pattern<(), ()> {
-    pub(crate) fn dummy() -> Rc<Self>{
-        Rc::new(Self {
+impl<T: ConsumerTuple + 'static, Out: 'static> Pattern<T, Out> {
+    pub(crate) fn inline(consumers: T, mapper: fn(T::Output, Span) -> Out) -> Pat<Out>{
+        Rc::new(Box::new(Self {
             name: None,
-            consumers: (),
-            mapper: |_, _|()
-        })
+            consumers,
+            mapper
+        }))
+    }
+
+    pub(crate) fn named(name: &str, consumers: T, mapper: fn(T::Output, Span) -> Out) -> Pat<Out>{
+        Rc::new(Box::new(Self {
+            name: Some(name.to_string()),
+            consumers,
+            mapper
+        }))
     }
 }
 
-impl<C: Consumer, Out> Pattern<(C,), Out> {
-    pub(crate) fn single(single: C, mapper: fn(<(C, ) as ConsumerTuple>::Output, Span) -> Out) -> Rc<Self> {
-        Rc::new(Self {
+impl Pattern<(), ()> {
+    pub(crate) fn dummy() -> Rc<Box<dyn ConsumablePattern<Output=()>>>{
+        Rc::new(Box::new(Self {
+            name: None,
+            consumers: (),
+            mapper: |_, _|()
+        }))
+    }
+}
+
+impl<C: Consumer + 'static, Out: 'static> Pattern<(C,), Out> {
+    pub(crate) fn single(single: C, mapper: fn(<(C, ) as ConsumerTuple>::Output, Span) -> Out) -> Pat<Out> {
+        Rc::new(Box::new(Self {
             name: None,
             consumers: (single, ),
             mapper
-        })
+        }))
     }
 }
 

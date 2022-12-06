@@ -17,12 +17,12 @@ pub(crate) fn parse_tokens(tokens: Vec<Token>) -> Result<(), ParseError>{
                      ),|_, _| ()),
         Trail::Never
     ),), |(path,), loc| Item(path, loc));
-
+    let (ref_loop_type_for_generics, ref_loop_type_for_generics_finalizer) = RefLoopPatternConsumer::<FullType>::create();
     let generics_pattern = Pattern::named("generics", (
         TokenConsumer(TokenType::Particle('<')),
         ListConsumer::maybe_empty_pred(
             ConditionalConsumer(Pattern::single(GetIdentConsumer, |(i,), _| i),
-                Pattern::single(RefLoopPatternConsumer::<FullType>::create(), |(i,), _| i)),
+                Pattern::single(ref_loop_type_for_generics, |(i,), _| i)),
             ConditionalConsumer(Pattern::single(TokenConsumer(TokenType::Particle(',')), |(i,), _| i),
                                 Pattern::single(TokenConsumer(TokenType::Particle(',')), |(_,), _| ())),
             Trail::Optional
@@ -44,11 +44,12 @@ pub(crate) fn parse_tokens(tokens: Vec<Token>) -> Result<(), ParseError>{
                                                       Pattern::single(GetIdentConsumer, |_, _| ())),
                                          |_, _| ()
     );
+    let (ref_loop_type_for_tuple, ref_loop_type_for_tuple_finalizer) = RefLoopPatternConsumer::<FullType>::create();
     let tuple_type_pattern = Pattern::inline((TokenConsumer(TokenType::Particle('(')),
                                                  ListConsumer::maybe_empty_pred(
         ConditionalConsumer(
         Pattern::single(PatternConsumer(type_predicate.clone()), |(i,), _| i),
-        Pattern::single(RefLoopPatternConsumer::<FullType>::create(), |(i,), _| i)),
+        Pattern::single(ref_loop_type_for_tuple, |(i,), _| i)),
         ConditionalConsumer(
             Pattern::single(TokenConsumer(TokenType::Particle(',')),|_, _| ()),
             Pattern::single(TokenConsumer(TokenType::Particle(',')),|_, _| ())),
@@ -61,8 +62,8 @@ pub(crate) fn parse_tokens(tokens: Vec<Token>) -> Result<(), ParseError>{
                      Pattern::single(PatternConsumer(type_pattern.clone()), |(t,), loc|TypeT::Single(t))
         ),
     ), |(ty,), loc| FullType(ty, loc));
-    tuple_type_pattern.consumers.1.0.1.consumers.0.finalize(Box::new(PatternConsumer(full_type_pattern.clone())));
-    generics_pattern.consumers.1.0.1.consumers.0.finalize(Box::new(PatternConsumer(full_type_pattern.clone())));
+    ref_loop_type_for_generics_finalizer.finalize(full_type_pattern.clone());
+    ref_loop_type_for_tuple_finalizer.finalize(full_type_pattern.clone());
     let ident_type_pair_pattern = Pattern::named("ident type pair", (
         GetIdentConsumer,
         TokenConsumer(TokenType::Particle(':')),
