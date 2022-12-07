@@ -42,12 +42,12 @@ impl Consumer for GetIdentConsumer {
 pub(crate) struct GetParticleConsumer;
 
 impl Consumer for GetParticleConsumer {
-    type Output = (char, Span);
+    type Output = char;
     fn consume(&self, iter: &mut TokIter) -> Result<Self::Output, ParseError> {
         let tok = iter.this()?;
         if let TokenType::Particle(c) = tok.tt {
             iter.next();
-            Ok((c, tok.loc))
+            Ok(c)
         }
         else {
             let tok = iter.this()?;
@@ -226,5 +226,19 @@ impl<Out> Consumer for Unwrapper<Out> {
     type Output = Out;
     fn consume(&self, iter: &mut TokIter) -> Result<Self::Output, ParseError> {
         self.0.consume(iter)?
+    }
+}
+
+pub(crate) struct MatchConsumer<Out>(pub(crate) Vec<(Pat<()>, Pat<Out>)>);
+
+impl<Out> Consumer for MatchConsumer<Out> {
+    type Output = Out;
+    fn consume(&self, iter: &mut TokIter) -> Result<Self::Output, ParseError> {
+        for (pred, pat) in &self.0 {
+            if let Ok(_) = pred.consume(&mut iter.clone()){
+                return pat.consume(iter)
+            }
+        }
+        return Err(ParseET::ParsingError("could not match to any case in pattern matcher".to_string()).at(iter.this()?.loc))
     }
 }

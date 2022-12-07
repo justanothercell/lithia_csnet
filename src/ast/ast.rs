@@ -1,9 +1,11 @@
-use crate::source::{ParseError, ParseET, Span};
+use std::collections::HashMap;
+use crate::source::{OnParseErr, ParseError, ParseET, Span};
 use crate::tokens::tokens::Literal;
 
 #[derive(Debug, Clone)]
 pub(crate) enum Expr {
     Literal(AstLiteral),
+    Variable(Ident),
     BinaryOp(Operator, Box<Expression>, Box<Expression>),
     UnaryOp(Operator, Box<Expression>)
 }
@@ -23,7 +25,7 @@ pub(crate) enum Op {
 
 impl Op {
     pub(crate) fn from_chars(chars: Vec<char>, loc: Option<Span>) -> Result<Op, ParseError>{
-        Ok(match String::from_utf8(chars.into_iter().map(|c|c as u8).collect()).unwrap().as_str() {
+        Ok(match chars.iter().collect::<String>().as_str() {
             "+" => Op::Add,
             "-" => Op::Sub,
             "*" => Op::Mul,
@@ -36,7 +38,7 @@ impl Op {
                     et.at(span)
                 } else {
                     et.error()
-                })
+                }).e_when(String::from("parsing operator"))
             }
         })
     }
@@ -98,7 +100,7 @@ pub(crate) struct Func {
 pub(crate) enum Stmt {
     FuncCall(Item, Vec<Expression>),
     VarCreate(Item, Self::mutable, Option<FullType>, Expression),
-    VarAssign(Item, Expression)
+    VarAssign(Item, Option<Operator>, Expression)
 }
 
 impl Stmt {
@@ -110,3 +112,11 @@ pub(crate) struct Statement(pub(crate) Stmt, pub(crate) Span);
 
 #[derive(Debug, Clone)]
 pub(crate) struct Block(pub(crate) Vec<Statement>, pub(crate) Span);
+
+#[derive(Debug, Clone)]
+pub(crate) struct Module{
+    sub_modules: IdentMap<Module>,
+    functions: IdentMap<Func>
+}
+
+pub(crate) type IdentMap<T> = HashMap<&'static str, (T, Span)>;

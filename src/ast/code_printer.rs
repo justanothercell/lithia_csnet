@@ -75,6 +75,7 @@ impl CodePrinter for Expression {
     fn print(&self) -> String {
         match &self.0 {
             Expr::Literal(lit) => lit.print(),
+            Expr::Variable(var) => var.print(),
             Expr::UnaryOp(op, box expr) => format!("{}{}", op.print(), expr.print()),
             Expr::BinaryOp(op, box left, box right) => format!("{} {} {}", left.print(), op.print(), right.print())
         }
@@ -105,7 +106,8 @@ impl CodePrinter for Statement {
                         ty.as_ref().map(|t|format!(": {}", t.print())).unwrap_or("".to_string()),
                         expr.print()
                 ),
-            Stmt::VarAssign(ident, expr) => format!("{} = {};", ident.print(), expr.print())
+            Stmt::VarAssign(ident, Some(op), expr) => format!("{} {}= {};", ident.print(), op.print(), expr.print()),
+            Stmt::VarAssign(ident, None, expr) => format!("{} = {};", ident.print(), expr.print())
         }
     }
 }
