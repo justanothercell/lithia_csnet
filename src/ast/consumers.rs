@@ -1,10 +1,10 @@
-use std::cell::{Cell, Ref, RefCell};
+use std::cell::{RefCell};
 use std::rc::Rc;
 use crate::ast::ast::{AstLiteral, Ident};
-use crate::ast::patterns::{ConsumablePattern, Consumer, ConsumerTuple, Pat, Pattern};
-use crate::source::{ParseError, ParseET, Span};
+use crate::ast::patterns::{ConsumablePattern, Consumer, Pat};
+use crate::source::{ParseError, ParseET};
 use crate::tokens::tok_iter::TokIter;
-use crate::tokens::tokens::TokenType;
+use crate::tokens::tokens::{glued, TokenType};
 
 pub(crate) struct TokenConsumer(pub(crate) TokenType);
 
@@ -21,6 +21,38 @@ impl Consumer for TokenConsumer {
         }
     }
 }
+
+impl TokenConsumer {
+    pub(crate) fn particle(p: char, glued: glued) -> Self {
+        Self(TokenType::Particle(p, glued))
+    }
+
+    pub(crate) fn ident(ident: &str) -> Self {
+        Self(TokenType::Ident(ident.to_string()))
+    }
+}
+
+pub(crate) struct ParticleConsumer(pub(crate) char);
+
+impl Consumer for ParticleConsumer {
+    type Output = ();
+
+    fn consume(&self, iter: &mut TokIter) -> Result<Self::Output, ParseError> {
+        if let TokenType::Particle(p, _) = iter.this()?.tt {
+            if p == self.0 {
+                iter.next();
+                Ok(())
+            } else {
+                Err(ParseET::ParsingError(format!("expected '{}', found '{p}'", self.0)).at(iter.this()?.loc))
+            }
+        }
+        else {
+            let tok = iter.this()?;
+            Err(ParseET::ParsingError(format!("expected particle '{}', found {:?}", self.0, tok.tt)).at(tok.loc))
+        }
+    }
+}
+
 
 pub(crate) struct GetIdentConsumer;
 
@@ -45,13 +77,30 @@ impl Consumer for GetParticleConsumer {
     type Output = char;
     fn consume(&self, iter: &mut TokIter) -> Result<Self::Output, ParseError> {
         let tok = iter.this()?;
-        if let TokenType::Particle(c) = tok.tt {
+        if let TokenType::Particle(c, _) = tok.tt {
             iter.next();
             Ok(c)
         }
         else {
             let tok = iter.this()?;
             Err(ParseET::ParsingError(format!("expected Particle, found {:?}", tok.tt)).at(tok.loc))
+        }
+    }
+}
+
+pub(crate) struct GetGluedParticleConsumer;
+
+impl Consumer for GetGluedParticleConsumer {
+    type Output = char;
+    fn consume(&self, iter: &mut TokIter) -> Result<Self::Output, ParseError> {
+        let tok = iter.this()?;
+        if let TokenType::Particle(c, true) = tok.tt {
+            iter.next();
+            Ok(c)
+        }
+        else {
+            let tok = iter.this()?;
+            Err(ParseET::ParsingError(format!("expected glued Particle, found {:?}", tok.tt)).at(tok.loc))
         }
     }
 }

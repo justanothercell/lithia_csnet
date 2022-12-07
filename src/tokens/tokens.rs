@@ -13,10 +13,14 @@ impl Debug for Token {
     }
 }
 
+#[allow(non_camel_case_types)]
+/// `true` if the preceding character is also a particle with no spaces or any kind of separator.
+/// Keep in mind that a lot of characters qualify as a particle so it is not always safe to assume a value.
+pub(crate) type glued = bool;
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum TokenType {
-    Particle(char),
+    Particle(char, glued),
     Ident(String),
     Literal(Literal)
 }

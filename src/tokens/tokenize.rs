@@ -14,6 +14,29 @@ pub(crate) fn tokenize(source: Source) -> Result<Vec<Token>, ParseError>{
                                                    |c| c != '"').e_when("tokenizing string literal".to_string())?;
                 tokens.push(TokenType::Literal(Literal::String(string)).at(span));
             }
+            '/' => {
+                iter.next();
+                let r: Result<(), ParseError> = try {
+                    match iter.this()? {
+                        '/' => {
+                            let _comment = collect_until(&mut iter, true, true,
+                                                         |c| c != '\n').e_when("tokenizing single line comment".to_string())?;
+                        },
+                        '*' => {
+                            loop {
+                                let _comment = collect_until(&mut iter, true, true,
+                                                             |c| c != '*').e_when("tokenizing single line comment".to_string())?;
+                                iter.next();
+                                if iter.this()? == '/' {
+                                    break
+                                }
+                            }
+                        }
+                        c => return Err(ParseET::TokenizationError(format!("expected single or multiline comment, found: '/{}'", c)).at(iter.here().span()))
+                    }
+                };
+                r.e_when(String::from("tokenizing comment"))?;
+            }
             '\'' => {
                 let (char_src, span) = collect_until(&mut iter, true, true,
                                                    |c| c != '\'').e_when("tokenizing char literal".to_string())?;
@@ -43,7 +66,9 @@ pub(crate) fn tokenize(source: Source) -> Result<Vec<Token>, ParseError>{
                 let (lit, ty) = str_to_num_lit(num).e_at(span.clone())?;
                 tokens.push(TokenType::Literal(Literal::Number(lit, ty)).at(span));
             }
-            c => tokens.push(TokenType::Particle(c).at(iter.here().span()))
+            c => tokens.push(TokenType::Particle(c, if let Ok(t) = iter.peekn(-1) {
+                    !(t.is_ascii_alphanumeric() || t == '_' || t == ' ')
+                } else {false}).at(iter.here().span()))
         }
         iter.next();
     }

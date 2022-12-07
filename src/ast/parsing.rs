@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 use crate::ast::ast::{Ident, Module};
-use crate::ast::code_printer::CodePrinter;
 use crate::ast::pattern_builder::build_patterns;
-use crate::source::{ParseError, Span};
+use crate::source::{ParseError};
 use crate::tokens::tok_iter::TokIter;
 use crate::tokens::tokens::{Token};
 use crate::ast::patterns::{ConsumablePattern};

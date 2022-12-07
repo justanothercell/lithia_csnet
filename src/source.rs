@@ -53,11 +53,11 @@ impl SourceIter {
     }
 
     pub(crate) fn get(&self, index: usize) -> Result<char, ParseError> {
-        if self.index >= self.source.source.len() {
+        if index >= self.source.source.len() {
             Err(ParseET::EOF.at(self.here().span()).when("getting char"))
         }
         else {
-            Ok(self.source.source.as_bytes()[self.index] as char)
+            Ok(self.source.source.as_bytes()[index] as char)
         }
     }
 
@@ -85,8 +85,8 @@ impl SourceIter {
         self.get(self.index + 1)
     }
 
-    pub(crate) fn peekn(&self, n: usize) -> Result<char, ParseError>{
-        self.get(self.index + n)
+    pub(crate) fn peekn(&self, n: isize) -> Result<char, ParseError>{
+        self.get((self.index as isize + n) as usize)
     }
 }
 
@@ -108,9 +108,9 @@ impl Display for SourceType {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct CodePoint(Rc<Source>, usize);
 
-#[allow(non_snake_case)]
+#[allow(non_camel_case_types)]
 type line = usize;
-#[allow(non_snake_case)]
+#[allow(non_camel_case_types)]
 type index_in_line = usize;
 
 impl CodePoint {
@@ -195,7 +195,7 @@ impl Span {
 
 impl Debug for Span {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Span({:?}, {}..{})", self.source, self.start, self.end)
+        write!(f, "{}..{}", self.start, self.end)
     }
 }
 

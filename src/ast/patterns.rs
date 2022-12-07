@@ -1,6 +1,6 @@
 use std::rc::Rc;
 use crate::ast::consumers::{ConditionalConsumer, PatternConsumer, Unwrapper};
-use crate::source::{OnParseErr, ParseError, Span};
+use crate::source::{OnParseErr, ParseError, ParseET, Span};
 use crate::tokens::tok_iter::TokIter;
 
 pub(crate) struct Pat<Out>(Rc<Box<dyn ConsumablePattern<Output=Out>>>);
@@ -18,9 +18,16 @@ impl<Out> Pat<Out>{
         ConditionalConsumer(self.clone(), self)
     }
 
-    pub(crate) fn check_ok(self) -> Pat<()>
+    pub(crate) fn ok(self) -> Pat<()>
         where Self: 'static {
         Pattern::single(self.con(),  |_, _|())
+    }
+
+    pub(crate) fn fail(self) -> Pat<()>
+        where Self: 'static {
+        self.maybe().mapper_failable(|(option,), loc| if option.is_some() {
+            Err(ParseET::ParsingError(String::from("expected condition to fail, got success")).at(loc))
+        } else { Ok(())}).pat()
     }
 
     pub(crate) fn mapper<Mapped: 'static>(self, mapper: fn((Out,), Span) -> Mapped) -> Pat<Mapped>

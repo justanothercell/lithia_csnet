@@ -8,10 +8,13 @@ fn my_cool_fn(arg1: T1, arg2: T2, arg3: path::to::T4) -> T5{
 
 fn main() {
     println("Hello, world!", "Goodbye, world!");
-    let a = 0;
+    let a = 0; // a comment
     let b: (bool, (bool, bool)) = "";
     let mut c = 0xFF;
     let mut d: Option<i32> = 0;
-    c = false;
+    c <<= x>>1;
+    f = c;
+    x = has_foo();
+    y = 1 + 2;
     path::to::println(0q32i8);
 }

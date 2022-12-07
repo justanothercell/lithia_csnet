@@ -1,8 +1,8 @@
-use crate::ast::ast::{Block, Expr, Expression, FullType, Func, Item, Module, Op, Operator, Statement, Stmt, Type, TypeT};
-use crate::ast::consumers::{BranchIfElse, ConditionalConsumer, CustomConsumer, GetIdentConsumer, GetLiteralConsumer, GetParticleConsumer, ListConsumer, MatchConsumer, PatternConsumer, RefLoopPatternConsumer, TokenConsumer, Trail};
+use crate::ast::ast::{AstLiteral, Block, Expr, Expression, FullType, Func, Item, Op, Operator, Statement, Stmt, Type, TypeT};
+use crate::ast::consumers::{BranchIfElse, ConditionalConsumer, CustomConsumer, GetGluedParticleConsumer, GetIdentConsumer, GetLiteralConsumer, GetParticleConsumer, ListConsumer, MatchConsumer, ParticleConsumer, PatternConsumer, RefLoopPatternConsumer, TokenConsumer, Trail};
 use crate::ast::patterns::{MapConsumer, Pat, Pattern};
 use crate::source::{ParseET, Span};
-use crate::tokens::tokens::TokenType;
+use crate::tokens::tokens::{Literal, TokenType};
 
 pub(crate) struct Patterns {
     pub(crate) module_content: Pat<(Vec<Func>, Span)>,
@@ -13,60 +13,63 @@ pub(crate) fn build_patterns() -> Patterns{
     let item_pattern = Pattern::named("item", (ListConsumer::non_empty(
         Pattern::single(GetIdentConsumer,|(ident,), _| ident),
         Pattern::inline((
-                            TokenConsumer(TokenType::Particle(':')),
-                            TokenConsumer(TokenType::Particle(':'))
+                            ParticleConsumer(':'),
+                            TokenConsumer::particle(':', true)  // ::
                         ),|_, _| ()),
         Trail::Never
     ),), |(path,), loc| Item(path, loc));
+
+    // === TYPES ===
     let (ref_loop_type_for_generics, ref_loop_type_for_generics_finalizer) = RefLoopPatternConsumer::<FullType>::create();
     let generics_pattern = Pattern::named("generics", (
-        TokenConsumer(TokenType::Particle('<')),
+        ParticleConsumer('<'),
         ListConsumer::maybe_empty_pred(
             ConditionalConsumer(GetIdentConsumer.pat(),
                                 Pattern::single(ref_loop_type_for_generics, |(i,), _| i)),
-            ConditionalConsumer(Pattern::single(TokenConsumer(TokenType::Particle(',')), |(i,), _| i),
-                                Pattern::single(TokenConsumer(TokenType::Particle(',')), |(_,), _| ())),
+            ConditionalConsumer(Pattern::single(ParticleConsumer(','), |(i,), _| i),
+                                Pattern::single(ParticleConsumer(','), |(_,), _| ())),
             Trail::Optional
         ),
-        TokenConsumer(TokenType::Particle('>')),
+        ParticleConsumer('>'),
     ), |(_, generics, _), _| generics);
     let optional_generics_pattern = Pattern::named("optional generics", (
-        ConditionalConsumer(Pattern::single(TokenConsumer(TokenType::Particle('<')), |_,_|()),
+        ConditionalConsumer(Pattern::single(ParticleConsumer('<'), |_,_|()),
                             generics_pattern.clone()),
     ), |(g,), _| g.unwrap_or(vec![])
     );
-
     let type_pattern = Pattern::named("single type", (
        item_pattern.clone().con(),
        optional_generics_pattern.clone().con()
     ), |(path, generics), loc| Type { generics, base_type: path, loc });
-    let type_predicate = BranchIfElse(TokenConsumer(TokenType::Particle('(')).pat(),
-                                                      TokenConsumer(TokenType::Particle('(')).pat(),
-                                                      GetIdentConsumer.pat().check_ok()).pat();
+    let type_predicate = BranchIfElse(ParticleConsumer('(').pat(),
+                                                      ParticleConsumer('(').pat(),
+                                                      GetIdentConsumer.pat().ok()).pat();
     let (ref_loop_type_for_tuple, ref_loop_type_for_tuple_finalizer) = RefLoopPatternConsumer::<FullType>::create();
-    let tuple_type_pattern = Pattern::inline((TokenConsumer(TokenType::Particle('(')),
+    let tuple_type_pattern = Pattern::inline((ParticleConsumer('('),
                                               ListConsumer::maybe_empty_pred(
                                                   ConditionalConsumer(
                                                      type_predicate.clone().con().pat(),
                                                       ref_loop_type_for_tuple.pat(),
                                                   ),
                                                   ConditionalConsumer(
-                                                      TokenConsumer(TokenType::Particle(',')).pat(),
-                                                      TokenConsumer(TokenType::Particle(',')).pat()),
+                                                      ParticleConsumer(',').pat(),
+                                                      ParticleConsumer(',').pat()),
                                                   Trail::Never),
-                                              TokenConsumer(TokenType::Particle(')'))
-                                             ), |(_, t, _ ), loc|TypeT::Tuple(t));
+                                              ParticleConsumer(')')
+                                             ), |(_, t, _ ), _loc|TypeT::Tuple(t));
     let full_type_pattern = Pattern::named("type", (
-        BranchIfElse(TokenConsumer(TokenType::Particle('(')).pat(),
+        BranchIfElse(ParticleConsumer('(').pat(),
                      tuple_type_pattern.clone(),
-                     Pattern::single(PatternConsumer(type_pattern.clone()), |(t,), loc|TypeT::Single(t))
+                     Pattern::single(PatternConsumer(type_pattern.clone()), |(t,), _loc|TypeT::Single(t))
         ),
     ), |(ty,), loc| FullType(ty, loc));
+
+    // === FUNCTION ===
     ref_loop_type_for_generics_finalizer.finalize(full_type_pattern.clone());
     ref_loop_type_for_tuple_finalizer.finalize(full_type_pattern.clone());
     let ident_type_pair_pattern = Pattern::named("ident type pair", (
         GetIdentConsumer,
-        TokenConsumer(TokenType::Particle(':')),
+        ParticleConsumer(':'),
        full_type_pattern.clone().con(),
     ),|(ident, _, ty), _| (ident, ty));
 
@@ -76,99 +79,122 @@ pub(crate) fn build_patterns() -> Patterns{
             ident_type_pair_pattern.clone()
         ),
                                        ConditionalConsumer(
-                                           TokenConsumer(TokenType::Particle(',')).pat(),
-                                           TokenConsumer(TokenType::Particle(',')).pat()),
+                                           ParticleConsumer(',').pat(),
+                                           ParticleConsumer(',').pat()),
                                        Trail::Never
         ),), |(args,), _| args);
 
     let arrow_pattern = Pattern::inline((
-                                            TokenConsumer(TokenType::Particle('-')),
-                                            TokenConsumer(TokenType::Particle('>'))
+                                            ParticleConsumer('-'),
+                                            ParticleConsumer('>')
                                         ), |_, _|());
-
-    let expr_pattern = Pattern::named("expression", (
-        GetLiteralConsumer,
-    ), |(lit,), loc| Expression(Expr::Literal(lit), loc)
-    );
+    // === EXPRESSION ===
+    #[derive(Debug, Clone)]
+    enum ExprPart{
+        Expr(Expression),
+        Op(Operator)
+    }
     let expr_predicate = CustomConsumer(|iter|{
         let tok = iter.this()?;
         iter.next();
         match tok.tt {
-            TokenType::Particle('(') => Ok(()),
-            TokenType::Particle('~') => Ok(()),
-            TokenType::Particle('-') => Ok(()),
-            TokenType::Particle('+') => Ok(()),
-            TokenType::Ident(_) => Ok(()),
-            TokenType::Literal(_) => Ok(()),
-            _ => Err(ParseET::ParsingError(format!("expected Expression, found {:?}", tok.tt)).at(tok.loc))
+            TokenType::Particle(')', _) => Ok(()),
+            TokenType::Particle(';', _) => Ok(()),
+            TokenType::Particle(',', _) => Ok(()),
+            _ => Err(ParseET::ParsingError(format!("found {:?}", tok.tt)).at(tok.loc))
         }
-    }).pat();
+    }).pat().fail();
+    let (ref_loop_fn_call,ref_loop_fn_call_finalizer) = RefLoopPatternConsumer::<Expr>::create();
+    let expr_pattern = Pattern::named("expression", (
+        ListConsumer::non_empty_pred(
+            ConditionalConsumer(expr_predicate.clone(),
+            MatchConsumer(vec![
+                (GetLiteralConsumer.pat().ok(), GetLiteralConsumer.pat()
+                    .mapper(|(lit,), loc| ExprPart::Expr(Expression(Expr::Literal(lit), loc)))),
+                (Pattern::inline((GetIdentConsumer, ParticleConsumer('(')), |_, _|()), ref_loop_fn_call.pat()
+                    .mapper(|(ident,), loc| ExprPart::Expr(Expression(ident, loc)))),
+                (GetIdentConsumer.pat().ok(), GetIdentConsumer.pat()
+                    .mapper(|(ident,), loc| ExprPart::Expr(Expression(Expr::Variable(ident), loc)))),
+                (GetParticleConsumer.pat().ok(), Pattern::inline((
+                    GetParticleConsumer,
+                    ListConsumer::maybe_empty(GetGluedParticleConsumer.pat(), Pattern::dummy(), Trail::Always)
+                ), |(p, mut pp, ), _| {pp.insert(0, p); pp})
+                    .mapper_failable(|(c,), loc| Ok(ExprPart::Op(Operator(Op::from_chars(c, Some(loc.clone()))?, loc))))),
+            ]).pat()),
+            Pattern::dummy().maybe(),
+            Trail::Always
+        ),
+    ), |(parts,), loc| {
+        Expression(Expr::Literal(AstLiteral(Literal::Bool(true), loc.clone())), loc)
+    }
+    );
     let args_pattern = Pattern::named("args", (ListConsumer::maybe_empty_pred(
         ConditionalConsumer(PatternConsumer(expr_predicate.clone()).pat(),
                             expr_pattern.clone()),
-        ConditionalConsumer(TokenConsumer(TokenType::Particle(',')).pat(),
-                            TokenConsumer(TokenType::Particle(',')).pat()),
+        ParticleConsumer(',').pat().maybe(),
         Trail::Never),
     ), |(args, ), _| args);
     let fn_call_pattern = Pattern::named("function call",(
        item_pattern.clone().con(),
-        TokenConsumer(TokenType::Particle('(')),
+        ParticleConsumer('('),
        args_pattern.clone().con(),
-        TokenConsumer(TokenType::Particle(')')),
-    ), |(ident, _, args, _), _| Stmt::FuncCall(ident, args)
+        ParticleConsumer(')'),
+    ), |(ident, _, args, _), _| Expr::FuncCall(ident, args)
     );
+    ref_loop_fn_call_finalizer.finalize(fn_call_pattern.clone());
+
+    // === STATEMENT ===
     let var_creation_pattern = Pattern::named("variable declaration",(
-        TokenConsumer(TokenType::Ident("let".to_string())),
-        ConditionalConsumer(TokenConsumer(TokenType::Ident("mut".to_string())).pat(),
-                            TokenConsumer(TokenType::Ident("mut".to_string())).pat()
-        ),
-       item_pattern.clone().con(),
-        ConditionalConsumer(TokenConsumer(TokenType::Particle(':')).pat(),
+        TokenConsumer::ident("let"),
+        TokenConsumer::ident("mut").pat().maybe(),
+        item_pattern.clone().con(),
+        ConditionalConsumer(ParticleConsumer(':').pat(),
                             Pattern::named("variable type", (
-                                TokenConsumer(TokenType::Particle(':')),
+                                ParticleConsumer(':'),
                                full_type_pattern.clone().con()
                             ), |(_, ty), _| ty)
         ),
-        TokenConsumer(TokenType::Particle('=')),
-       expr_pattern.clone().con()
+        ParticleConsumer('='),
+        expr_pattern.clone().con()
     ), |(_, mutable, ident, ty, _, value), _|
                                                   Stmt::VarCreate(ident, mutable.is_some(), ty, value)
     );
 
     let var_assign_pattern = Pattern::named("variable assignment",(
-       item_pattern.clone().con(),
-        ListConsumer::non_empty(GetParticleConsumer.pat(),
-                                Pattern::dummy(),
-                                Trail::Always)
-            .mapper_failable(|(mut c,), loc|{
-                let equals = c.pop().unwrap();
-                if equals != '=' {
-                    return Err(ParseET::ParsingError(format!("Expected '=', found '{equals}'")).at(loc))
-                }
-                if c.len() > 0 {
-                    Ok(Some(Operator(Op::from_chars(c, Some(loc.clone()))?, loc)))
-                } else { Ok(None)}
-            }),
-       expr_pattern.clone().con()
+        item_pattern.clone().con(),
+        BranchIfElse(ParticleConsumer('=').pat().fail(),
+                     Pattern::named("variable assignment",(
+                         GetParticleConsumer,
+                         ListConsumer::non_empty_pred(ConditionalConsumer(ParticleConsumer('=').pat().fail(), GetGluedParticleConsumer.pat()),
+                                                    Pattern::dummy().maybe(),
+                                                    Trail::Always),
+                     TokenConsumer::particle('=', true)  // equals should be right behind
+                     ),|(c, mut cc, _), _loc| {
+                        cc.insert(0, c);
+                        cc
+                     }).mapper_failable(|(cc,), loc|{
+                        Ok(Some(Operator(Op::from_chars(cc, Some(loc.clone()))?, loc)))
+                    }),
+                     ParticleConsumer('=').pat().mapper(|_, _| None)
+        ),
+        expr_pattern.clone().con()
     ), |(ident, op, value), _loc| Stmt::VarAssign(ident, op,value)
     );
 
     let statement_pattern = Pattern::named("statement",(
-        BranchIfElse(Pattern::single(TokenConsumer(TokenType::Ident("let".to_string())), |_, _|()),
-                     var_creation_pattern.clone(),
-                     Pattern::single(BranchIfElse(Pattern::inline((
-                                                                      GetIdentConsumer,
-                                                                      BranchIfElse(
-                                                                          TokenConsumer(TokenType::Particle(':')).pat(),
-                                                                          TokenConsumer(TokenType::Particle(':')).pat(),
-                                                                          TokenConsumer(TokenType::Particle('(')).pat(),
-                                                                      )
-                                                                  ), |_, _|()),
-                                                  fn_call_pattern.clone(),
-                                                  var_assign_pattern.clone()
-                     ),|(stmt,), loc| stmt),
-        ),
-        TokenConsumer(TokenType::Particle(';'))
+        MatchConsumer(vec![
+            (TokenConsumer::ident("let").pat(), var_creation_pattern.clone()),
+            (Pattern::inline((
+                                 GetIdentConsumer,
+                                 BranchIfElse(
+                                     ParticleConsumer(':').pat(),
+                                     ParticleConsumer(':').pat(),
+                                     ParticleConsumer('(').pat(),
+                                 )
+                             ), |_, _|()), fn_call_pattern.clone().mapper(|(func,), loc|Stmt::Expression(Expression(func, loc)))),
+            (Pattern::dummy(), var_assign_pattern.clone())
+        ]),
+        ParticleConsumer(';')
     ), |(stmt, _), loc| Statement(stmt, loc)
     );
 
@@ -184,19 +210,19 @@ pub(crate) fn build_patterns() -> Patterns{
     );
 
     let fn_pattern = Pattern::named("function", (
-        TokenConsumer(TokenType::Ident("fn".to_string())),
+        TokenConsumer::ident("fn"),
         GetIdentConsumer,
-        TokenConsumer(TokenType::Particle('(')),
+        ParticleConsumer('('),
         fn_def_args_pattern.clone().con(),
-        TokenConsumer(TokenType::Particle(')')),
+        ParticleConsumer(')'),
         ConditionalConsumer(arrow_pattern.clone(),
                             Pattern::named("return type",(
                                arrow_pattern.clone().con(),
                                full_type_pattern.con()
                             ), |(_, ty), _| ty )).mapper(|(ty,), loc|ty.unwrap_or(FullType(TypeT::empty(), loc))),
-        TokenConsumer(TokenType::Particle('{')),
+        ParticleConsumer('{'),
         block_pattern.clone().con(),
-        TokenConsumer(TokenType::Particle('}')),
+        ParticleConsumer('}'),
     ), |(_, ident, _, args, _, ret, _, body, _), loc| Func {
         name: ident,
         args,
@@ -208,19 +234,19 @@ pub(crate) fn build_patterns() -> Patterns{
 
     // only for full module, not module content
     let mod_content_pred = MatchConsumer(vec![
-        (fn_predicate.clone().check_ok(), Pattern::dummy())
+        (fn_predicate.clone().ok(), Pattern::dummy())
     ]
     ).pat();
 
+    #[derive(Debug, Clone)]
     enum ModuleObject{
         Function(Func)
     }
-
     let mod_content_pattern = Pattern::named("module content",
                                              (
                                                  ListConsumer::maybe_empty_pred(
                                                  ConditionalConsumer(Pattern::dummy(), MatchConsumer(vec![
-                                                     (fn_predicate.clone().check_ok(), fn_pattern.clone().mapper(|(func,), _| ModuleObject::Function(func)))
+                                                     (fn_predicate.clone().ok(), fn_pattern.clone().mapper(|(func,), _| ModuleObject::Function(func)))
                                                     ]
                                                  ).pat()),
                                                  Pattern::dummy().maybe(),

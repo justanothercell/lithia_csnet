@@ -6,6 +6,7 @@ use crate::tokens::tokens::Literal;
 pub(crate) enum Expr {
     Literal(AstLiteral),
     Variable(Ident),
+    FuncCall(Item, Vec<Expression>),
     BinaryOp(Operator, Box<Expression>, Box<Expression>),
     UnaryOp(Operator, Box<Expression>)
 }
@@ -98,7 +99,7 @@ pub(crate) struct Func {
 
 #[derive(Debug, Clone)]
 pub(crate) enum Stmt {
-    FuncCall(Item, Vec<Expression>),
+    Expression(Expression),
     VarCreate(Item, Self::mutable, Option<FullType>, Expression),
     VarAssign(Item, Option<Operator>, Expression)
 }

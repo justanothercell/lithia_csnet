@@ -92,6 +92,7 @@ impl CodePrinter for AstLiteral {
 impl CodePrinter for Expression {
     fn print(&self) -> String {
         match &self.0 {
+            Expr::FuncCall(ident, args) => format!("{}({})", ident.print(), args.print_items().join(", ")),
             Expr::Literal(lit) => lit.print(),
             Expr::Variable(var) => var.print(),
             Expr::UnaryOp(op, box expr) => format!("{}{}", op.print(), expr.print()),
@@ -116,7 +117,7 @@ impl CodePrinter for Operator {
 impl CodePrinter for Statement {
     fn print(&self) -> String {
         match &self.0 {
-            Stmt::FuncCall(ident, args) => format!("{}({});", ident.print(), args.print_items().join(", ")),
+            Stmt::Expression(expr) => format!("{};", expr.print()),
             Stmt::VarCreate(ident, mutable, ty, expr) =>
                 format!("let {}{}{} = {};",
                         if *mutable { "mut "} else {""}.to_string(),
