@@ -115,8 +115,10 @@ pub(crate) struct Block(pub(crate) Vec<Statement>, pub(crate) Span);
 
 #[derive(Debug, Clone)]
 pub(crate) struct Module{
-    sub_modules: IdentMap<Module>,
-    functions: IdentMap<Func>
+    pub(crate) name: Ident,
+    pub(crate) sub_modules: Map<Module>,
+    pub(crate) functions: Map<Func>,
+    pub(crate) loc: Span
 }
 
-pub(crate) type IdentMap<T> = HashMap<&'static str, (T, Span)>;
+pub(crate) type Map<T> = HashMap<String, T>;

@@ -13,9 +13,11 @@ mod analyzer;
 
 use std::error::Error;
 use std::process::exit;
+use crate::ast::code_printer::CodePrinter;
 use crate::ast::parsing::parse_tokens;
 use crate::cs_compiler::{compile_cs, CsCompilerArgs, CsCompilerWarn, run_exe, TargetType};
 use crate::source::{Source};
+use crate::source::SourceType::String;
 use crate::tokens::tokenize::{str_to_num_lit, tokenize};
 
 pub(crate) type Result<T> = core::result::Result<T, Box<dyn Error>>;
@@ -27,13 +29,14 @@ fn main(){
         Err(e) => panic!("{}", e)
     };
     println!("{:#?}", tokens);
-    match parse_tokens(tokens) {
-        Ok(_) => {}
+    let main = match parse_tokens(tokens, "test_project") {
+        Ok(module) => module,
         Err(e) => {
             eprintln!("{}", e);
             exit(1)
         }
-    }
+    };
+    println!("{}", main.print());
 }
 
 fn main_compile_cs()  {

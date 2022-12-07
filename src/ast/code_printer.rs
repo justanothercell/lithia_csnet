@@ -1,17 +1,35 @@
-use crate::ast::ast::{AstLiteral, Expr, Expression, FullType, Func, Ident, Item, Op, Operator, Statement, Stmt, Type, TypeT};
+use crate::ast::ast::{AstLiteral, Expr, Expression, FullType, Func, Ident, Item, Module, Op, Operator, Statement, Stmt, Type, TypeT};
 use crate::tokens::tokens::{Literal, NumLit};
 
 pub(crate) trait CodePrinter{
     fn print(&self) -> String;
+    fn print_indented(&self) -> String {
+        String::from("    ") + &self.print().replace("\n", "\n    ")
+    }
+}
+
+impl<T: CodePrinter> CodePrinter for &T {
+    fn print(&self) -> String {
+        T::print(self)
+    }
+
+    fn print_indented(&self) -> String {
+        T::print_indented(self)
+    }
 }
 
 trait VecPrinter{
     fn print_items(&self) -> Vec<String>;
+    fn print_items_join_indented(&self) -> String;
 }
 
 impl<T: CodePrinter> VecPrinter for Vec<T> {
     fn print_items(&self) -> Vec<String> {
         self.iter().map(|t| t.print()).collect()
+    }
+
+    fn print_items_join_indented(&self) -> String {
+        self.iter().map(|t| t.print_indented()).collect::<Vec<_>>().join("\n")
     }
 }
 
@@ -115,18 +133,24 @@ impl CodePrinter for Statement {
 impl CodePrinter for Func {
     fn print(&self) -> String {
         format!("fn {}({}){} {{{}}}",
-                self.name.print(),
-                self.args.iter().map(|(ident, ty)| format!("{}: {}", ident.print(), ty.0.print())).collect::<Vec<String>>().join(", "),
-                if self.ret.0.is_empty() {
-                    String::new()
-                } else {
-                    format!(" -> {}", self.ret.print())
-                },
-                if self.body.0.is_empty() {
-                    String::new()
-                } else {
-                    format!("\n    {}\n", self.body.0.print_items().join("\n    "))
-                }
+            self.name.print(),
+            self.args.iter().map(|(ident, ty)| format!("{}: {}", ident.print(), ty.0.print())).collect::<Vec<String>>().join(", "),
+            if self.ret.0.is_empty() {
+                String::new()
+            } else {
+                format!(" -> {}", self.ret.print())
+            },
+            if self.body.0.is_empty() {
+                String::new()
+            } else {
+                format!("\n{}\n", self.body.0.print_items_join_indented())
+            }
         )
+    }
+}
+
+impl CodePrinter for Module {
+    fn print(&self) -> String {
+        format!("mod {} {{\n{}\n}}", self.name.print(), self.functions.values().collect::<Vec<_>>().print_items_join_indented())
     }
 }
