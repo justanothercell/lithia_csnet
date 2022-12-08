@@ -1,7 +1,7 @@
-use crate::ast::ast::{AstLiteral, Block, Expr, Expression, FullType, Func, Item, Op, Operator, Statement, Stmt, Type, TypeT};
+use crate::ast::ast::{AstLiteral, Block, Expr, Expression, FullType, Func, Item, Op, Operator, OpGroup, Statement, Stmt, Type, TypeT};
 use crate::ast::consumers::{BranchIfElse, ConditionalConsumer, CustomConsumer, GetGluedParticleConsumer, GetIdentConsumer, GetLiteralConsumer, GetParticleConsumer, ListConsumer, MatchConsumer, ParticleConsumer, PatternConsumer, RefLoopPatternConsumer, TokenConsumer, Trail};
 use crate::ast::patterns::{MapConsumer, Pat, Pattern};
-use crate::source::{ParseET, Span};
+use crate::source::{ParseError, ParseET, Span};
 use crate::tokens::tokens::{Literal, TokenType};
 
 pub(crate) struct Patterns {
@@ -92,7 +92,17 @@ pub(crate) fn build_patterns() -> Patterns{
     #[derive(Debug, Clone)]
     enum ExprPart{
         Expr(Expression),
-        Op(Operator)
+        Op(Operator),
+        MultiOps(Vec<Op>, Span)
+    }
+    impl ExprPart {
+        fn loc(&self) -> Span{
+            match self {
+                ExprPart::Expr(expr) => expr.1.clone(),
+                ExprPart::Op(op) => op.1.clone(),
+                ExprPart::MultiOps(_, loc) => loc.clone()
+            }
+        }
     }
     let expr_predicate = CustomConsumer(|iter|{
         let tok = iter.this()?;
@@ -118,14 +128,80 @@ pub(crate) fn build_patterns() -> Patterns{
                 (GetParticleConsumer.pat().ok(), Pattern::inline((
                     GetParticleConsumer,
                     ListConsumer::maybe_empty(GetGluedParticleConsumer.pat(), Pattern::dummy(), Trail::Always)
-                ), |(p, mut pp, ), _| {pp.insert(0, p); pp})
-                    .mapper_failable(|(c,), loc| Ok(ExprPart::Op(Operator(Op::from_chars(c, Some(loc.clone()))?, loc))))),
+                ), |(p, mut pp, ), _loc| { pp.insert(0, p); pp })
+                    .mapper_failable(|(c, ), loc| Ok(ExprPart::MultiOps(Op::from_chars_multi(c, Some(loc.clone()))?, loc)))),
             ]).pat()),
             Pattern::dummy().maybe(),
             Trail::Always
         ),
-    ), |(parts,), loc| {
-        Expression(Expr::Literal(AstLiteral(Literal::Bool(true), loc.clone())), loc)
+    ), |(parts,), _loc| parts).mapper_failable(|(mut parts,), loc| {
+        // === flatten MultiPops ===
+        let mut flattened = vec![];
+        for part in parts.into_iter() {
+            if let ExprPart::MultiOps(ops, loc) = part {
+                for op in ops {
+                    flattened.push(ExprPart::Op(Operator(op, loc.clone())))
+                }
+            } else {
+                flattened.push(part)
+            }
+        }
+        parts = flattened;
+        // === unary ops ===
+        let mut combined_parts = vec![];
+        let mut num_ops = 1; // start at 1 to allow unary ops at the beginning
+        for part in parts {
+            if let ExprPart::Expr(mut expr) = part {
+                while num_ops > 1 {
+                    if let ExprPart::Op(op) = combined_parts.pop().unwrap() {
+                        let loc = op.1.clone();
+                        expr = Expression(Expr::UnaryOp(op, Box::new(expr)), loc)
+                    } else { unreachable!("this should have been an op but was an expression") }
+                    num_ops -= 1;
+                }
+                combined_parts.push(ExprPart::Expr(expr));
+                num_ops = 0;
+            } else {
+                combined_parts.push(part);
+                num_ops += 1;
+            }
+        }
+        parts = combined_parts;
+        // === binary ops ===
+        macro_rules! combine_parts {
+            ($op_group: ident) => {
+                let mut parts_iter = parts.into_iter();
+                let mut combined_parts = vec![];
+                while let Some(part) = parts_iter.next() {
+                    match part {
+                        ExprPart::Op(op) if op.0.group() == OpGroup::$op_group => {
+                            let (l, r) = (combined_parts.pop(), parts_iter.next());
+                            if let (Some(ExprPart::Expr(left)), Some(ExprPart::Expr(right))) = (l.clone(), r.clone()){
+                                let mut span = left.1.clone();
+                                span.extend(right.1.end());
+                                combined_parts.push(ExprPart::Expr(Expression(Expr::BinaryOp(op, Box::new(left), Box::new(right)), span)))
+                            } else {
+                                return Err(ParseET::ParsingError(format!("operator {:?} expects expression on both sides", op.0)).at(op.1))
+                            }
+                        },
+                        p => combined_parts.push(p)
+                    }
+                }
+                parts = combined_parts;
+            };
+        }
+        combine_parts!(Dot);
+        combine_parts!(Bin);
+        combine_parts!(Dash);
+        combine_parts!(Bool);
+
+        if parts.len() != 1 {
+            return Err(ParseET::ParsingError(format!("could not resolve expression completely, expected 1 resolved part but found {}", parts.len())).at(loc))
+        }
+        if let ExprPart::Expr(expr) = parts.pop().unwrap() {
+            return Ok(expr);
+        }
+        return Err(ParseET::ParsingError(format!("could not resolve expression completely")).at(loc))
     }
     );
     let args_pattern = Pattern::named("args", (ListConsumer::maybe_empty_pred(

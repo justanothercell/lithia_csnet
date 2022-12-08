@@ -96,7 +96,7 @@ impl CodePrinter for Expression {
             Expr::Literal(lit) => lit.print(),
             Expr::Variable(var) => var.print(),
             Expr::UnaryOp(op, box expr) => format!("{}{}", op.print(), expr.print()),
-            Expr::BinaryOp(op, box left, box right) => format!("{} {} {}", left.print(), op.print(), right.print())
+            Expr::BinaryOp(op, box left, box right) => format!("({} {} {})", left.print(), op.print(), right.print())
         }
     }
 }
@@ -108,8 +108,11 @@ impl CodePrinter for Operator {
             Op::Sub => "-",
             Op::Mul => "*",
             Op::Div => "/",
+            Op::And => "&&",
+            Op::Or => "||",
+            Op::Not => "!",
             Op::LShift => "<<",
-            Op::RShift => ">>"
+            Op::RShift => ">>",
         }.to_string()
     }
 }

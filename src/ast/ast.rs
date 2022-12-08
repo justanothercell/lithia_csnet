@@ -20,8 +20,19 @@ pub(crate) enum Op {
     Sub,
     Mul,
     Div,
+    And,
+    Or,
+    Not,
     LShift,
     RShift,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum OpGroup {
+    Dot,
+    Dash,
+    Bin,
+    Bool,
 }
 
 impl Op {
@@ -31,10 +42,13 @@ impl Op {
             "-" => Op::Sub,
             "*" => Op::Mul,
             "/" => Op::Div,
+            "&&" => Op::And,
+            "||" => Op::Or,
+            "!" => Op::Not,
             "<<" => Op::LShift,
             ">>" => Op::RShift,
             op => {
-                let et = ParseET::ParsingError(format!("Operator '{op}' not recognized"));
+                let et = ParseET::ParsingError(format!("operator '{op}' not recognized"));
                 return Err(if let Some(span) = loc {
                     et.at(span)
                 } else {
@@ -42,6 +56,45 @@ impl Op {
                 }).e_when(String::from("parsing operator"))
             }
         })
+    }
+
+    pub(crate) fn from_chars_multi(mut chars: Vec<char>, loc: Option<Span>) -> Result<Vec<Op>, ParseError>{
+        let original = chars.iter().collect::<String>();
+        let mut ops = vec![];
+        while chars.len() > 0 {
+            let mut secondary = vec![];
+            while chars.len() > 0 {
+                if let Ok(op) = Op::from_chars(chars.clone(), None) {
+                    ops.push(op);
+                    break
+                } else {}
+                secondary.insert(0, chars.pop().unwrap())
+            }
+            if chars.len() == 0 {
+                let et = ParseET::ParsingError(format!("operator '{original}' not recognized", ));
+                return Err(if let Some(span) = loc {
+                    et.at(span)
+                } else {
+                    et.error()
+                }).e_when(String::from("parsing (multi) operator"))
+            }
+            chars = secondary;
+        }
+        Ok(ops)
+    }
+
+    pub(crate) fn group(&self) -> OpGroup {
+        match self {
+            Op::Add => OpGroup::Dash,
+            Op::Sub => OpGroup::Dash,
+            Op::Mul => OpGroup::Dot,
+            Op::Div => OpGroup::Dot,
+            Op::And => OpGroup::Bool,
+            Op::Or => OpGroup::Bool,
+            Op::Not => OpGroup::Bool,
+            Op::LShift => OpGroup::Bin,
+            Op::RShift => OpGroup::Bin,
+        }
     }
 }
 

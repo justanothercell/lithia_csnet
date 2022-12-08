@@ -9,7 +9,6 @@ use crate::ast::patterns::{ConsumablePattern};
 pub(crate) fn parse_tokens(tokens: Vec<Token>, mod_name: &str) -> Result<Module, ParseError>{
     let mut iter = TokIter::new(tokens);
     let mut start = iter.this()?.loc;
-    println!("{:?}", iter);
     let patterns = build_patterns();
     let (functions, _span) = patterns.module_content.consume(&mut iter)?;
     let end = iter.nearest_point()?;

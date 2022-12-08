@@ -32,7 +32,12 @@ pub(crate) fn tokenize(source: Source) -> Result<Vec<Token>, ParseError>{
                                 }
                             }
                         }
-                        c => return Err(ParseET::TokenizationError(format!("expected single or multiline comment, found: '/{}'", c)).at(iter.here().span()))
+                        _ => { // was just normal division slash or sth other
+                            iter.index -= 1;
+                            tokens.push(TokenType::Particle('/', if let Ok(t) = iter.peekn(-1) {
+                                !(t.is_ascii_alphanumeric() || t == '_' || t == ' ')
+                            } else {false}).at(iter.here().span()))
+                        }
                     }
                 };
                 r.e_when(String::from("tokenizing comment"))?;
