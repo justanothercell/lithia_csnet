@@ -1,0 +1,7 @@
+fn b_foo(){
+    println("b_foo")
+}
+
+fn b_bar(){
+    println("b_bar");
+}

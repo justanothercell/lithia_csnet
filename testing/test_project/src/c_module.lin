@@ -1,0 +1,7 @@
+fn c_foo(){
+    println("c_foo")
+}
+
+fn c_bar(){
+    println("c_bar");
+}

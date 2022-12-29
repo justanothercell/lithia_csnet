@@ -1,0 +1,23 @@
+use ::a_module::a_foo;
+use ::a_module::a_bar;
+use ::b_module;
+
+fn my_cool_fn(arg1: i32, arg2: i32) -> i32{
+    return arg2 - arg1
+}
+
+fn main() {
+    println("Hello, world!");
+    let a = 12; // a comment
+    let b: i32 = 4;
+    let mut c = 0xFF;
+    c -= b * 4;
+    let r = my_cool_fn(a, c);
+    println("answer: " + r);
+    a_foo();
+    a_bar();
+    b_module::b_foo();
+    b_module::b_bar();
+    ::c_module::c_foo();
+    ::c_module::c_foo();
+}
