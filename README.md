@@ -8,7 +8,9 @@ This repository will now be archived. Further switches are highly unlikely, more
 
 If you have any questions, please submit them via the lithia repo or directly to me, **not this repository!**
 
-This is the continuation of the [lithia](https://github.com/DragonFIghter603/lithia) project.
+------
+###### old
+*This is the continuation of the [lithia](https://github.com/DragonFIghter603/lithia) project.
 Reasons for the switch were the need for a modular token parser/AST generator,
 as the old one did not hold up to standards, as well as the slow speed of the custom bytecode 
-interpreter, to which lithia compiled.
+interpreter, to which lithia compiled.*
